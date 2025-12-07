@@ -67,8 +67,7 @@ LEFT JOIN endereco e
        ON e.id_endereco = c.fk_endereco
 LEFT JOIN tabela_preco tp 
        ON tp.id_tabela = c.fk_tabela_preco;
-
-
+       
 SELECT * FROM vw_clientes_view;
 
 
@@ -119,7 +118,7 @@ LEFT JOIN (
 select * from vw_fornecedor_view;
 
 
--- VIEWS TABELA DE PRECO SEM MARGEM
+-- VIEWS TABELA DE PRECO 
 CREATE OR REPLACE VIEW vw_tabela_preco_familia_view AS
 SELECT 
 p.id_produto,
@@ -132,7 +131,7 @@ left join preco_produto_tabela as pt
 on pt.fk_produto = p.id_produto
 left join tabela_preco as t
 on pt.fk_tabela_preco = t.id_tabela
-where t.nome_tabela = "Tabela Família";
+where t.nome_tabela = "Família";
 
 CREATE OR REPLACE VIEW vw_tabela_preco_padrao_view AS
 SELECT 
@@ -146,54 +145,66 @@ left join preco_produto_tabela as pt
 on pt.fk_produto = p.id_produto
 left join tabela_preco as t
 on pt.fk_tabela_preco = t.id_tabela
-where t.nome_tabela = "Tabela Padrão";
+where t.nome_tabela = "Padrão";
+
+CREATE OR REPLACE VIEW vw_tabela_preco_vital_view AS
+SELECT 
+p.id_produto,
+p.nome as produto,
+p.tipo_produto,
+pt.preco_produto as preco_kg,
+t.nome_tabela as tabela
+from produto as p
+left join preco_produto_tabela as pt
+on pt.fk_produto = p.id_produto
+left join tabela_preco as t
+on pt.fk_tabela_preco = t.id_tabela
+where t.nome_tabela = "Vital";
 
 select * from vw_tabela_preco_familia_view;
 
 select * from vw_tabela_preco_padrao_view;
 
--- Margem dos precos 
 
-CREATE OR REPLACE VIEW vw_margem_produto AS
+-- VIEWS DASHBOARD
+-- RENDIMENTO, TOTAL APLICADO E PESO POR PERIODO 
+
+CREATE OR REPLACE VIEW vw_rendimento_peso_total_periodo_view as 
+select round(sum(ic.rendimento),2) as Rendimento, round(sum(ic.peso_kg * ic.preco_unitario),2) as Total_Aplicado, 
+sum(ic.peso_kg) as Peso_Total
+from item_pedido_compra ic join compra
+on ic.id_fk_compra = compra.id_compra
+where compra.data_compra between '2025-11-03' and '2025-11-09';
+
+select * from vw_rendimento_peso_total_periodo_view;
+
+-- top10 produtos com maior rendimento
+CREATE OR REPLACE VIEW vw_top10_produtos_rendimento AS
 SELECT 
-    p_compra.id_produto AS id_produto_compra,
-    p_venda.id_produto AS id_produto_venda,
-    p_compra.nome AS produto,
-    p_compra.tipo_produto,
+    p.nome AS produto,
+    ROUND(SUM(ic.rendimento), 2) AS rendimento_total
+FROM item_pedido_compra ic
+JOIN produto p ON ic.id_fk_produto = p.id_produto
+GROUP BY p.id_produto, p.nome
+ORDER BY rendimento_total DESC
+LIMIT 10;
 
-    -- preços
-    preco_compra.preco_produto AS preco_kg_compra,
-    preco_venda.preco_produto AS preco_kg_venda,
-
-    -- margem absoluta
-    (preco_venda.preco_produto - preco_compra.preco_produto) AS margem_kg,
-
-    -- margem percentual
-    ROUND(
-        (preco_venda.preco_produto - preco_compra.preco_produto)
-        / preco_compra.preco_produto * 100,
-        2
-    ) AS margem_percentual
-
-FROM produto p_compra
-JOIN preco_produto_tabela preco_compra
-    ON preco_compra.fk_produto = p_compra.id_produto
-JOIN tabela_preco t_compra
-    ON t_compra.id_tabela = preco_compra.fk_tabela_preco
-   AND t_compra.tipo = 'C'
-   AND t_compra.nome_tabela = 'Tabela Padrão'
+select * from vw_top10_produtos_rendimento;
 
 
-JOIN produto p_venda
-    ON p_venda.nome = p_compra.nome
+-- top 10 fornecedores com maior rendimento
+CREATE OR REPLACE VIEW vw_top10_fornecedores_rendimento AS
+SELECT 
+    f.nome AS fornecedor,
+    ROUND(SUM(ic.rendimento), 2) AS rendimento_total
+FROM item_pedido_compra ic
+JOIN compra c ON ic.id_fk_compra = c.id_compra
+JOIN fornecedor f ON c.fk_fornecedor = f.id_fornecedor
+GROUP BY f.id_fornecedor, f.nome
+ORDER BY rendimento_total DESC
+LIMIT 10;
 
-JOIN preco_produto_tabela preco_venda
-    ON preco_venda.fk_produto = p_venda.id_produto
-JOIN tabela_preco t_venda
-    ON t_venda.id_tabela = preco_venda.fk_tabela_preco
-   AND t_venda.tipo = 'V'
-   AND t_venda.nome_tabela = 'Vital';
+select * from vw_top10_fornecedores_rendimento;
 
 
-select * from vw_margem_produto;
 
